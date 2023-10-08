@@ -2,5 +2,5 @@
 Nergiz Selin Angın  
 2018402117
 
-
+[Link to my progress journal](https://bu-ie-423.github.io/fall-23-selinnangin/)
 
