@@ -1,11 +1,9 @@
-### Welcome to My GitHub Page
-## BU IE 423 Fall
-Nergiz Selin Angın
+### Welcome to My GitHub Page For BU IE 423 Fall
+Nergiz Selin Angın 
 2018402117
 
 
 
-wdklnewldn
 You can use the [editor on GitHub](https://github.com/BU-IE-423/fall-23-ilaydacelenkk/edit/main/index.md) to maintain and preview the content for your website in Markdown files.
 
 Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
