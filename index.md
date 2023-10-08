@@ -3,4 +3,4 @@ Nergiz Selin Angın
 2018402117
 
 [Link to my progress journal](https://bu-ie-423.github.io/fall-23-selinnangin/)
-
+[My repository](https://github.com/BU-IE-423/fall-23-selinnangin)
