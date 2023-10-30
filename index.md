@@ -5,4 +5,4 @@ Nergiz Selin Angın
 [Link to my progress journal](https://bu-ie-423.github.io/fall-23-selinnangin/)  
 [My repository](https://github.com/BU-IE-423/fall-23-selinnangin)
 
-[Project Part 1](file:///Users/selinangin/Documents/GitHub/fall-23-selinnangin/Project_Part_1.html)
+
