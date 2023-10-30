@@ -1,29 +1,149 @@
 ---
-title: "IE 423 Paroject Part 1"
+title: "Boğaziçi University"
 output: html_document
-date: "2023-10-30"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+### IE 423 - Project Part-1
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+#### 2023-11-02
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+###### Nergiz Selin Angın - 2018402117
 
-```{r cars}
-summary(cars)
+###### İlayda Küçükafacan - 2018402120
+
+###### Ege Tuna Diken - 2020402282
+
+<br>
+
+##### Introduction
+
+******A short introduction about the context of your analysis, the data you are using, and what you are trying to find out or demonstrate.*********
+
+
+#### 1. Library Loading
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(ggplot2) 
+library(lubridate) 
+library(dplyr) 
+library(gtrendsR) 
+```
+<br>
+
+#### 2. Data Import
+```{r}
+file_path <- "/Users/selinangin/Desktop/IE 423/Project Part 1/all_ticks_long.csv.gz"
+my_data <- read.csv(gzfile(file_path), header = TRUE)
+```
+<br>
+
+#### 3. Selecting Six Stocks to Anlayze
+```{r echo=TRUE, warning=FALSE, results = 'hide'}
+# Check the first few rows of the data 
+head(my_data)
+# Get unique short_name values
+unique_names <- unique(my_data$short_name)
+# Display at least the first 200 unique short_names 
+head(unique_names, 200)
+# List of companies to check
+companies <- c("AKBNK", "AYGAZ", "BANVT", "CCOLA", "SISE", "YKBNK")
+# Convert the timestamp to a date-time object
+my_data$timestamp <- as.POSIXct(my_data$timestamp, format="%Y- %m-%dT%H:%M:%SZ")
+# Extract year and month from the timestamp 
+my_data$year_month <- format(my_data$timestamp, "%Y-%m")
+filtered_data <- subset(my_data, short_name %in% companies)
+```
+<br>
+Akbank, Aygaz, Banvit, Coca Cola, Şişecam Group, and Yapi Kredi have been meticulously selected for the analysis, representing a diverse array of sectors including the financial, energy, food, beverage, industrial, and again, financial sectors respectively. 
+<br>
+<br>
+
+#### 4. Monthly Box-Plots of the Selected Six Stocks
+```{r}
+# Generate separate boxplots for each company using facet_wrap 
+ggplot(filtered_data, aes(x=year_month, y=price)) +
+geom_boxplot(outlier.color="red", outlier.shape=16, outlier.size=2) + theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 5)) +theme(axis.text.y = element_text( size = 5))+ facet_wrap(~ short_name, scales="free_y", ncol=1) + labs(title="Monthly Stock Prices by Company")
+
+```
+<br>
+
+#### 5. Outliers of the Data  
+##### 5.1. First Approach
+
+```{r}
+# Calculate outliers using IQR for each company and month 
+outliers_data <- filtered_data %>%
+group_by(short_name, year_month) %>% mutate(Q1 = quantile(price, 0.25),
+Q3 = quantile(price, 0.75),
+IQR = Q3 - Q1,
+lower_bound = Q1 - 1.5 * IQR, upper_bound = Q3 + 1.5 * IQR) %>%
+filter(price < lower_bound | price > upper_bound) %>% ungroup()
+print(outliers_data)
+```
+<br>
+The initial approach produced a massive set of 5499 outlier rows through a row-by-row analysis, which ultimately proved inefficient. To address this inefficiency, a second method is implemented. It centers around calculating the monthly means. This approach streamlines the process, allowing us to identify outliers based on these monthly averages, which provides a more concise and effective means of analysis.
+<br>
+<br>
+
+##### 5.2. Second Approach
+
+```{r}
+# Calculate monthly means for the selected companies 
+monthly_means <- filtered_data %>%
+group_by(short_name, year_month) %>% summarize(monthly_mean = mean(price), .groups = "drop")
+# Add a 'year' column to the monthly_means data 
+monthly_means$year <- as.integer(format(as.Date(monthly_means$year_month, format = "%Y- %m"), "%Y"))
+# Compute the annual statistics for each company 
+annual_stats <- monthly_means %>%
+group_by(short_name, year) %>% summarise(annual_mean = mean(monthly_mean),
+Q1 = quantile(monthly_mean, 0.25),
+Q3 = quantile(monthly_mean, 0.75),
+IQR = Q3 - Q1,
+lower_bound = annual_mean - 1.5 * IQR, upper_bound = annual_mean + 1.5 * IQR, .groups = "drop")
+# Determine outlier months for each company and year based on the computed bounds
+outlier_months <- monthly_means %>%
+left_join(annual_stats, by = c("short_name", "year")) %>%
+filter(monthly_mean < lower_bound | monthly_mean > upper_bound) %>%
+select(short_name, year_month, monthly_mean)
+print(outlier_months, n=nrow(outlier_months))
+
+```
+<br>
+Using the second method, the table above successfully highlights 21 months that have been identified as outliers.
+<br>
+
+Displayed below are the plots representing the monthly average values for each company. These visual representations facilitate an easy examination of outlier months on a company-by-company basis, ensuring a comprehensive understanding of the data.
+<br>
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+ggplot(monthly_means, aes(x=year_month, y=monthly_mean)) + geom_line(aes(color=short_name), size=1) + geom_point(aes(color=short_name), size=1) + theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1,size=5)) + theme(axis.text.y = element_text( size = 5)) + facet_wrap(~ short_name, scales="free_y", ncol=1) + labs(title="Monthly Average Stock Prices by Company", y="Average
+Price")
 ```
 
-## Including Plots
+#### 6. Insights with Google Trends Data
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
+
+
+
+
+
+
+
+##### fkjbfkebvjkefbv
+```{r}
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+
+
+
