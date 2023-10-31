@@ -123,7 +123,7 @@ ggplot(monthly_means, aes(x=year_month, y=monthly_mean)) + geom_line(aes(color=s
 Price")
 ```
 
-#### 6. Insights with Google Trends Data. 
+#### 6. Insights with Google Trends Data 
 <br>
 ##### 6.1. Akbank
 ```{r}
