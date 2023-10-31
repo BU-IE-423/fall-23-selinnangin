@@ -20,10 +20,8 @@ knitr::opts_chunk$set(echo = TRUE)
 <br>
 
 ##### Introduction 
-
-******A short introduction about the context of your analysis, the data you are using, and what you are trying to find out or demonstrate.*********
-
-
+The project focused on analyzing stock data for six diverse companies: Akbank, Aygaz, Banvit, Coca Cola, Şişecam Group, and Yapi Kredi. Through visual representation using box-plots, monthly stock performances were assessed, with two methods adopted to identify outliers. The first method identified numerous outliers, while the refined second method highlighted 21 specific outlier months. Subsequently, the research incorporated Google Trends data, observing the online popularity trajectory of the companies, such as Akbank and Aygaz. This data was juxtaposed with stock performances to discern potential correlations. The findings suggest a possible correlation between search volume of related keywords and stock prices.
+<br>
 #### 1. Library Loading
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
@@ -352,11 +350,6 @@ ggplot(data = filtered_data) +
 ```
 
 
-
-##### fkjbfkebvjkefbv
-```{r}
-
-```
 
 
 
