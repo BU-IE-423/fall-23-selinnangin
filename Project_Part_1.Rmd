@@ -160,23 +160,23 @@ ggplot(data = filtered_data) +
   scale_color_manual(values = c("Google Trends" = "blue", "Stock Data" =
                                   "red")) + theme_minimal()
 #*****
-diff_data <- c(diff(filtered_data$hits),0)
-filtered_data$hits<-diff_data
-cor(diff_data, filtered_data$monthly_mean)
-decopm_data<- decompose(filtered_data$hits,type="additive")
+#diff_data <- c(diff(filtered_data$hits),0)
+#filtered_data$hits<-diff_data
+#cor(diff_data, filtered_data$monthly_mean)
+#decopm_data<- decompose(filtered_data$hits,type="additive")
 
 
-ccf(diff_data, filtered_data$monthly_mean, lag.max = 10)
-kendall_corr <- cor(filtered_data$hits, filtered_data$monthly_mean, method = "kendall")
-pearson_corr <- cor(filtered_data$hits, filtered_data$monthly_mean, method = "pearson")
-library(ggcorrplot)
-corr_data<-data.frame(c(filtered_data$hits,filtered_data$monthly_mean ))
-length(filtered_data$hits)
-length(filtered_data$monthly_mean)
-ggcorrplot(corr_data, 
-           hc.order = TRUE, 
-           type = "lower",
-           lab = TRUE)
+#ccf(diff_data, filtered_data$monthly_mean, lag.max = 10)
+#kendall_corr <- cor(filtered_data$hits, filtered_data$monthly_mean, method = "kendall")
+#pearson_corr <- cor(filtered_data$hits, filtered_data$monthly_mean, method = "pearson")
+#library(ggcorrplot)
+#corr_data<-data.frame(c(filtered_data$hits,filtered_data$monthly_mean ))
+#length(filtered_data$hits)
+#length(filtered_data$monthly_mean)
+#ggcorrplot(corr_data, 
+ #          hc.order = TRUE, 
+ #          type = "lower",
+ #          lab = TRUE)
 ```
 
 
@@ -185,13 +185,6 @@ ggcorrplot(corr_data,
 # Fetching Google Trends data for "Aygaz" for the given timeframe in Turkey
 gtrends_result2 <- gtrends("Aygaz", geo = "TR", time = "2012-01-01 2023-01-01")
 
-
-aygaz_trends <- gtrends_result2$interest_over_time
-
-# Aygaz google trends plot 
-ggplot(data = aygaz_trends) +
-  geom_line(aes(x = date, y = hits), color = "blue", size = 1) + labs(title = "Google Trends Search Volume for 'Aygaz'", x = "Date",    y = "Search Volume") +
-  theme_minimal()
 
 aygaz_trends <- gtrends_result2$interest_over_time
 
