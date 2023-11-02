@@ -19,10 +19,12 @@ knitr::opts_chunk$set(echo = TRUE)
 
 <br>
 
-##### Introduction 
-The project focused on analyzing stock data for six diverse companies: Akbank, Aygaz, Banvit, Coca Cola, Şişecam Group, and Yapi Kredi. Through visual representation using box-plots, monthly stock performances were assessed, with two methods adopted to identify outliers. The first method identified numerous outliers, while the refined second method highlighted 21 specific outlier months. Subsequently, the research incorporated Google Trends data, observing the online popularity trajectory of the companies, such as Akbank and Aygaz. This data was juxtaposed with stock performances to discern potential correlations. The findings suggest a possible correlation between search volume of related keywords and stock prices.
-<br>
-#### 1. Library Loading
+#### 1. Introduction
+This report presents a comprehensive analysis of the stock data from six diverse companies: Akbank, Aygaz, Banvit, Coca Cola, Şişecam Group, and Yapi Kredi. Utilizing box-plots for visual representation, we evaluated their monthly stock performances and identified outliers through two distinct methods, with the refined second method pinpointing 21 specific outlier months. Furthermore, we incorporated Google Trends data to explore potential correlations between online popularity and stock prices.  
+    
+  
+  
+#### 2. Library Loading
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
 library(ggplot2) 
@@ -32,14 +34,14 @@ library(gtrendsR)
 ```
 <br>
 
-#### 2. Data Import
+#### 3. Data Import
 ```{r}
 file_path <- "/Users/selinangin/Desktop/IE 423/Project Part 1/all_ticks_long.csv.gz"
 my_data <- read.csv(gzfile(file_path), header = TRUE)
 ```
 <br>
 
-#### 3. Selecting Six Stocks to Anlayze
+#### 4. Selecting Six Stocks to Anlayze
 ```{r echo=TRUE, warning=FALSE, results = 'hide'}
 # Check the first few rows of the data 
 head(my_data)
@@ -60,7 +62,7 @@ Akbank, Aygaz, Banvit, Coca Cola, Şişecam Group, and Yapi Kredi have been meti
 <br>
 <br>
 
-#### 4. Monthly Box-Plots of the Selected Six Stocks
+#### 5. Monthly Box-Plots of the Selected Six Stocks
 ```{r}
 # Generate separate boxplots for each company using facet_wrap 
 ggplot(filtered_data, aes(x=year_month, y=price)) +
@@ -70,8 +72,10 @@ theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 5)) +theme(axis.t
 ```
 <br>
 
-#### 5. Outliers of the Data  
-##### 5.1. First Approach
+#### 6. Outliers of the Data  
+<br>
+
+##### 6.1. First Approach
 
 ```{r}
 # Calculate outliers using IQR for each company and month 
@@ -88,7 +92,7 @@ The initial approach produced a massive set of 5499 outlier rows through a row-b
 <br>
 <br>
 
-##### 5.2. Second Approach
+##### 6.2. Second Approach
 
 ```{r}
 # Calculate monthly means for the selected companies 
@@ -122,12 +126,14 @@ Displayed below are the plots representing the monthly average values for each c
 ggplot(monthly_means, aes(x=year_month, y=monthly_mean)) + geom_line(aes(color=short_name), size=1) + geom_point(aes(color=short_name), size=1) + theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1,size=5)) + theme(axis.text.y = element_text( size = 5)) + facet_wrap(~ short_name, scales="free_y", ncol=1) + labs(title="Monthly Average Stock Prices by Company", y="Average
 Price")
 ```
+<br>
+<br>
 
-
-#### 6. Insights with Google Trends Data 
+#### 7. Insights with Google Trends Data 
 
 <br>
-##### 6.1. Akbank
+
+##### 7.1. Akbank
 ```{r}
 # Fetching Google Trends data for "Akbank" for the given time frame in Turkey
 gtrends_result <- gtrends("Akbank", geo = "TR", time = "2012-01-01 2023-01-01")
@@ -159,28 +165,14 @@ ggplot(data = filtered_data) +
        y = "Value") +
   scale_color_manual(values = c("Google Trends" = "blue", "Stock Data" =
                                   "red")) + theme_minimal()
-#*****
-#diff_data <- c(diff(filtered_data$hits),0)
-#filtered_data$hits<-diff_data
-#cor(diff_data, filtered_data$monthly_mean)
-#decopm_data<- decompose(filtered_data$hits,type="additive")
 
-
-#ccf(diff_data, filtered_data$monthly_mean, lag.max = 10)
-#kendall_corr <- cor(filtered_data$hits, filtered_data$monthly_mean, method = "kendall")
-#pearson_corr <- cor(filtered_data$hits, filtered_data$monthly_mean, method = "pearson")
-#library(ggcorrplot)
-#corr_data<-data.frame(c(filtered_data$hits,filtered_data$monthly_mean ))
-#length(filtered_data$hits)
-#length(filtered_data$monthly_mean)
-#ggcorrplot(corr_data, 
- #          hc.order = TRUE, 
- #          type = "lower",
- #          lab = TRUE)
 ```
+<br>
+The graphical representation clearly elucidates the relationship between the search volume for "Akbank" and its corresponding stock prices, especially when the declining trend in Google Trends data is factored out. The plot distinctly showcases periods of strong correlation, particularly noticeable during the first half of 2013, early 2014, late 2014, early 2015, and the onset of 2017. Additionally, the decline in Akbank's stock prices observed in 2018 is also reflected in the Google Trends data with a slight delay. During these specific intervals, the movements in search volume align closely with the stock price fluctuations, highlighting a compelling synchronicity between public interest as reflected in online searches and the financial performance of Akbank.
+<br>
+<br>
 
-
-##### 6.2. Aygaz
+##### 7.2. Aygaz
 ```{r}
 # Fetching Google Trends data for "Aygaz" for the given timeframe in Turkey
 gtrends_result2 <- gtrends("Aygaz", geo = "TR", time = "2012-01-01 2023-01-01")
@@ -212,8 +204,12 @@ ggplot(data = filtered_data) +
                                   "red")) + theme_minimal()
 
 ```
+<br>
+The plot above shows that, despite the greater volatility observed in the trends data, there is a noticeable reflection of stock data fluctuations within the trend data, albeit occurring with a certain delay. This lag is evident when we observe the stock data’s decline at the onset of 2016, its subsequent peak in the first half of 2017, and the noticeable decline in the first half of 2018—all of which are captured by the trends data. 
+<br>
+<br>
 
-##### 6.3. Banvit
+##### 7.3. Banvit
 ```{r}
 # This will fetch Google Trends data for "Banvit" for the given timeframe in Turkey
 gtrends_result3 <- gtrends("Banvit", geo = "TR", time = "2012-01-01 2023-01-01")
@@ -246,17 +242,21 @@ ggplot(data = filtered_data) +
                                   "red")) + theme_minimal()
 
 ```
+<br>
+The graph provides a compelling visual representation, demonstrating that once the three major peaks in Google Trends are omitted, a significant correlation between trend data and stock prices becomes evident. Notably, this correlation is particularly strong from mid-2017 onward, with both sets of data following a closely aligned trajectory. This observation suggests that, aside from sporadic spikes in search volume, trend data has the potential to mirror stock price movements, offering valuable insights into market behavior.
+<br>
+<br>
 
-##### 6.4. Coca Cola
+##### 7.4.  Coca Cola
 ```{r}
 # This will fetch Google Trends data for "CCola" for the given timeframe in Turkey
-gtrends_result4 <- gtrends("CCola", geo = "TR", time = "2012-01-01 2023-01-01")
+gtrends_result4 <- gtrends("Coca Cola", geo = "TR", time = "2012-01-01 2023-01-01")
 
 # This section is for the interest over time only.
 ccola_trends <- gtrends_result4$interest_over_time
 # CCola Google Trends plot
 ggplot(data = ccola_trends) +
-  geom_line(aes(x = date, y = hits), color = "blue", size = 1) + labs(title = "Google Trends Search Volume for 'CCola'",
+  geom_line(aes(x = date, y = hits), color = "blue", size = 1) + labs(title = "Google Trends Search Volume for 'Coca Cola'",
                                                                       x = "Date",
                                                                       y = "Search Volume") +
   theme_minimal()
@@ -278,11 +278,14 @@ ggplot(data = filtered_data) +
        y = "Value") +
   scale_color_manual(values = c("Google Trends" = "blue", "Stock Data" =
                                   "red")) + theme_minimal()
+
+
 ```
+<br>
+In the above graph, upon normalizing the major peaks within the Google Trends data to create a smoother representation, it is observed that the relationship between trends data and stock price appears to remain consistent. Despite the adjustments made to the data, the underlying trend suggests that there is still a noteworthy correspondence between the fluctuations in search volume and stock prices. This implies that the observed relationship is not solely dependent on the extreme values, reinforcing the potential relevance of Google Trends data in analyzing stock market movements.  
 
+##### 7.5. Şişecam Group   
 
-
-##### 6.5. Şişecam Group
 ```{r}
 
 # This will fetch Google Trends data for "Sise" for the given timeframe in Turkey
@@ -316,11 +319,12 @@ ggplot(data = filtered_data) +
                                   "red")) + theme_minimal()
 
 ```
+<br>
+The graph above clearly illustrates a synchronous movement between the increasing trends of Google Trends data and stock data, showcasing their alignment over time. Furthermore, it is apparent that the fluctuations experienced in 2018, especially, are mirrored in the trend data with a noticeable delay. This lag in response within the Google Trends data highlights the potential time-shifted relationship between public interest, as reflected in search volumes, and stock price movements.
+<br>
+<br>
 
-
-
-
-##### 6.6. Yapi Kredi 
+##### 7.6.  Yapi Kredi
 ```{r}
 # This will fetch Google Trends data for "Ykbnk" for the given timeframe in Turkey
 gtrends_result6 <- gtrends("Ykbnk", geo = "TR", time = "2012-01-01 2023-01-01")
@@ -353,7 +357,21 @@ ggplot(data = filtered_data) +
                                   "red")) + theme_minimal()
 
 ```
+<br>
+By disregarding the significant peak in Trends data from 2018, which could be attributed to a variety of factors unrelated to stock price, we can observe a correlation between stock price and trends data. Although the relationship is not perfect, the remaining data suggests that there is indeed a noteworthy association between the two, highlighting the potential for Google Trends data to offer insights into stock price movements when external anomalies are accounted for.
+<br>
+<br>
 
+#### 8. Conclusion
+
+The findings reveals a nuanced relationship between search volumes and stock prices, highlighting a tentative yet noticeable connection. While the correlation is not absolute, it is evident that stock prices are more directly influenced by major corporate events. Following these significant occurrences, there appears to be a delayed effect on Google Trends data, indicating that public interest and online searches respond to shifts in stock prices rather than precede them.  
+
+
+#### 9. References  
+
+ChatGPT Conversation:
+<br>
+https://chat.openai.com/share/be667f96-e4b9-47cd-bf1e-cfccc8fbc2a6
 
 
 
