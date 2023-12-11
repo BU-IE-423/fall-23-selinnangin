@@ -1,0 +1,744 @@
+---
+title: "Boğaziçi University"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### IE 423 - Project Part 2
+
+#### 2023-12-11
+
+###### Nergiz Selin Angın - 2018402117
+
+###### İlayda Küçükafacan - 2018402120
+
+###### Ege Tuna Diken - 2020402282
+
+<br>
+
+#### 1. Introduction
+
+This assignment aims to explore the complex relationship between control charts, a tool commonly used in quality control, and pairs trading, an equally strong tool for monitoring financial time series data. We seek to identify highly correlated equities by examining the BIST30 stock indexes, and we use linear regression to predict the dynamics of their association. The constant variance assumption, which postulates that the spread between the pair is constant throughout time, is the fundamental tenet of this technique.
+
+We will investigate two aspects: first, we will create a fundamental foundation for pairs trading based on the constant variance assumption. In order to extract trading signals from the regression model's residuals, stock pairs must be identified, their relationships must be modeled, and control charts must then be applied. This strategy's effectiveness will be evaluated using a trading simulation with a predetermined capital to evaluate possible gains.
+
+Subsequently, we progress to a more sophisticated approach that incorporates time series analysis to enhance our comprehension of the residuals. In order to recalibrate our control limitations and produce a better trading simulation, this section pushes us to use advanced modeling techniques. Next, in order to clarify the relative efficacy of the basic and advanced tactics, a comparison study will be performed by contrasting their respective results.
+
+This project highlights the need of statistical process control in trading and is a testament to the union of quality engineering methods with financial strategies. By the time this project is finished, we hope to have a better understanding of how pairs trading might benefit from control charts, which can provide a tactical advantage in the never-ending hunt for market inefficiencies.
+
+
+#### 2. Data Preparation
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(readr)
+library(corrplot)
+library(ggplot2)
+library(forecast)  
+
+
+# Set the working directory to the folder containing your CSV files
+setwd("~/Desktop/20180101_20231121_bist30")
+
+# List all CSV files in the directory
+file_paths <- list.files(pattern = "*.csv", full.names = TRUE)
+
+# Apply the transformation to each file and combine the results
+all_dfs <- bind_rows(lapply(file_paths, transform_df))
+
+# Arrange by date
+all_dfs <- all_dfs %>%
+  arrange(date)
+
+
+```
+
+<br>
+
+#### 3. Pair-Wise Correlation Analysis
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+cor_matrix <- cor(all_dfs[, -1], use = "complete.obs") # Excluding date column
+high_cor_threshold <- 0.8 # Threshold for high correlation
+high_cor_pairs <- which(cor_matrix > high_cor_threshold & cor_matrix < 1, arr.ind = TRUE)
+
+# Find the most correlated pairs
+cor_pairs <- data.frame(row = high_cor_pairs[, 1], column = high_cor_pairs[, 2])
+cor_pairs <- cor_pairs[!duplicated(t(apply(cor_pairs, 1, sort))), ] # Removing mirror duplicates
+
+# Add stock names to the pairs
+stock_names <- colnames(all_dfs)[-1] # Exclude date column
+cor_pairs$stock1 <- stock_names[cor_pairs$row]
+cor_pairs$stock2 <- stock_names[cor_pairs$column]
+
+# Correctly extracting correlation values
+cor_pairs$correlation <- mapply(function(row, column) cor_matrix[row, column], cor_pairs$row, cor_pairs$column)
+
+# Print the most correlated pairs
+print("Most Correlated Pairs:"); print(cor_pairs[1:30,]) #rows are shortened****
+```
+
+In the "Most Correlated Pairs" table presented above, we see the results of a correlation analysis. This analysis was meticulously conducted using only complete observations. To identify the most correlated pairs, a stringent threshold of 0.8 was set for high correlation. This strategy was aimed at pinpointing column pairs in the dataset that not only exceeded this high correlation threshold but also avoided perfect correlation, meaning their correlation value was less than 1. The process included a careful step to filter out any mirrored duplicates, a crucial measure that ensured the uniqueness of each pair in the final analysis.
+
+<br>
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# Function to find the most correlated pair for each stock
+find_most_correlated_pair <- function(stock_name, cor_matrix, stock_names) {
+  stock_index <- which(stock_names == stock_name)
+  correlations <- cor_matrix[stock_index, ]
+  correlations[stock_index] <- NA  # Exclude correlation with itself
+  max_correlation_index <- which.max(correlations)
+  most_correlated_stock <- stock_names[max_correlation_index]
+  max_correlation <- correlations[max_correlation_index]
+  
+  return(data.frame(stock1 = stock_name, stock2 = most_correlated_stock, correlation = max_correlation))
+}
+
+# Calculate the most correlated pair for each stock
+most_correlated_pairs <- lapply(stock_names, function(stock_name) find_most_correlated_pair(stock_name, cor_matrix, stock_names))
+
+# Combine the results into a single data frame
+most_correlated_pairs_df <- do.call(rbind, most_correlated_pairs)
+
+# Sorting the dataframe in decreasing order of correlation
+sorted_df <- most_correlated_pairs_df %>%
+  arrange(desc(correlation))
+
+# Print the sorted most correlated pairs for each stock 
+print(sorted_df)
+
+```
+
+The table presented above summarizes each stock's most correlated counterpart and arranges them in descending order based on their correlation values. This methodical approach effectively highlights the strongest pairwise relationships within the dataset, providing valuable insights into how different stocks are related to each other in terms of their market movements.
+
+Among these pairs, two notable selections have been made for further analysis based on their exceptionally high correlations. From the Aviation sector, the pair **PGSUS & THYAO** has been chosen, while from the Banking sector, the **AKBNK & GARAN** pair has been identified.
+
+The fact that these stocks exhibit high correlation is quite expected, as they operate within the same industry sectors. This commonality in their industry background is likely a key factor contributing to their correlated movements in the market. The observation from the table above clearly indicates that stocks within the same industry sector tend to exhibit correlated movements in the market.
+
+<br>
+
+#### 4. Visualization of the Correlated Pairs
+
+##### 4.1. Banking Sector Pair: AKBNK vs GARAN
+
+```{r message=FALSE, warning=FALSE}
+
+banking_sector_plot <- ggplot(data = all_dfs, aes(x = date)) +
+  geom_line(aes(y = AKBNK, color = "AKBNK")) +
+  geom_line(aes(y = GARAN, color = "GARAN")) +
+  labs(title = "Closing Prices of Banking Sector Stocks (2018-2023)", 
+       x = "Date", 
+       y = "Price (TRY)",
+       color = "Company") +
+  scale_color_manual(values = c("AKBNK" = "blue", "GARAN" = "red")) +
+  theme_light() +
+  theme(legend.title = element_text(size = 10), 
+        legend.text = element_text(size = 8),
+        legend.position = "bottom",
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14))
+# Display the plot
+banking_sector_plot
+
+```
+
+As can be seen, the two stock prices exhibit a highly correlated movement.
+
+<br>
+
+##### 4.2. Aviation Sector Pair: PGSUS vs THYAO
+
+```{r message=FALSE, warning=FALSE}
+aviation_sector_plot <- ggplot(data = all_dfs, aes(x = date)) +
+  geom_line(aes(y = PGSUS, color = "PGSUS")) +
+  geom_line(aes(y = THYAO, color = "THYAO")) +
+  labs(title = "Closing Prices of Aviation Sector Stocks (2018-2023)", 
+       x = "Date", 
+       y = "Price (TRY)",
+       color = "Company") +
+  scale_color_manual(values = c("PGSUS" = "green", "THYAO" = "orange")) +  # Example colors
+  theme_light() +
+  theme(legend.title = element_text(size = 10), 
+        legend.text = element_text(size = 8),
+        legend.position = "bottom",
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14))
+
+# Display the plot
+aviation_sector_plot
+
+```
+
+It is evident that the two stock prices demonstrate a strong correlation in their movements.
+
+<br>
+
+#### 5. Correlation Analysis
+
+```{r message=FALSE, warning=FALSE}
+
+# Calculate and print correlation for the Banking Sector Pair (AKBNK and GARAN)
+correlation_banking <- cor(all_dfs$AKBNK, all_dfs$GARAN, use = "complete.obs")
+print(paste("Correlation between AKBNK and GARAN: ", correlation_banking))
+
+# Calculate and print correlation for the Aviation Sector Pair (THYAO and PGSUS)
+correlation_aviation <- cor(all_dfs$THYAO, all_dfs$PGSUS, use = "complete.obs")
+print(paste("Correlation between THYAO and PGSUS: ", correlation_aviation))
+
+# Create a smaller data frame with just the pairs
+pairs_df <- data.frame(
+  Date = all_dfs$date,
+  AKBNK = all_dfs$AKBNK,
+  GARAN = all_dfs$GARAN,
+  THYAO = all_dfs$THYAO,
+  PGSUS = all_dfs$PGSUS
+)
+
+# Compute the correlation matrix for the pairs
+cor_matrix_pairs <- cor(select(pairs_df, -Date), use = "complete.obs")
+
+# Plot the correlation matrix
+corrplot(cor_matrix_pairs, method = "circle", type = "upper", tl.col = "black", tl.srt = 45)
+
+```
+
+<br>
+
+#### 6. Basic Trading Strategy Using Constant Variance Assumption
+
+##### 6.1. Linear Regression Models and Residuals
+
+```{r message=FALSE, warning=FALSE}
+# Linear regression model for AKBNK and GARAN
+lm_banking <- lm(GARAN ~ AKBNK, data = pairs_df)
+
+# Summary of the linear model for Banking
+summary(lm_banking)
+
+# Linear regression model for THYAO and PGSUS
+lm_aviation <- lm(PGSUS ~ THYAO, data = pairs_df)
+
+# Summary of the linear model for Aviation
+summary(lm_aviation)
+
+# Calculate and plot residuals for the banking sector pair
+residuals_banking <- residuals(lm_banking)
+plot(residuals_banking, main = "Residuals for Banking Sector Pair (GARAN ~ AKBNK)", ylab = "Residuals", xlab = "Time")
+abline(h = 0, col = "red")  # Zero line for reference
+
+# Calculate and plot residuals for the aviation sector pair
+residuals_aviation <- residuals(lm_aviation)
+plot(residuals_aviation, main = "Residuals for Aviation Sector Pair (PGSUS ~ THYAO)", ylab = "Residuals", xlab = "Time")
+abline(h = 0, col = "red")  # Zero line for reference
+
+```
+
+##### 6.2. Two-Sigma Control Charts for Residuals
+
+```{r message=FALSE, warning=FALSE}
+
+# 2-Sigma control limits for banking sector pair
+mean_residuals_banking <- mean(residuals_banking)
+sd_residuals_banking <- sd(residuals_banking)
+upper_limit_banking <- mean_residuals_banking + 2 * sd_residuals_banking
+lower_limit_banking <- mean_residuals_banking - 2 * sd_residuals_banking
+
+# 2-Sigma control limits for aviation sector pair
+mean_residuals_aviation <- mean(residuals_aviation)
+sd_residuals_aviation <- sd(residuals_aviation)
+upper_limit_aviation <- mean_residuals_aviation + 2 * sd_residuals_aviation
+lower_limit_aviation <- mean_residuals_aviation - 2 * sd_residuals_aviation
+
+# Plot residuals with control limits for banking sector pair
+plot(residuals_banking, main = "Linear Regression Model Residuals with \n Two Sigma Control Limits for Banking Sector", ylab = "Residuals", xlab = "Time")
+abline(h = c(upper_limit_banking, lower_limit_banking), col = "blue")
+abline(h = 0, col = "red")
+
+# Plot residuals with control limits for aviation sector pair
+plot(residuals_aviation, main = "Linear Regression Model Residuals with \n Two Sigma Control Limits for Aviation Sector", ylab = "Residuals", xlab = "Time")
+abline(h = c(upper_limit_aviation, lower_limit_aviation), col = "blue")
+abline(h = 0, col = "red")
+
+```
+
+<br>.
+
+##### 6.3. Basic Trading Simulation with Linear Regression Model
+
+##### a. Banking Sector Basic Trading Simulation
+
+```{r message=FALSE, warning=FALSE}
+# Buy or sell stocks based on the magnitude of the deviation from the control limits, we can introduce a scaling factor.
+# This factor will determine the number of stocks to buy or sell depending on how far the residual is from the upper or lower limit.
+
+
+# Initialize variables for the simulation of banking sector
+initial_capital_banking <- 100000  # Example initial capital for the banking sector
+positions_banking <- data.frame(Date = pairs_df$Date, Stock1_Position = rep(0, nrow(pairs_df)), Stock2_Position = rep(0, nrow(pairs_df)), Capital = initial_capital_banking, stringsAsFactors = FALSE)
+stock1_price_banking <- pairs_df$AKBNK
+stock2_price_banking <- pairs_df$GARAN
+
+# Scaling factor to determine the number of stocks to trade for the banking sector
+scaling_factor_banking <- 1000   # This can be adjusted based on strategy
+
+# Loop through each day to simulate trades for the banking sector
+for(i in 2:nrow(positions_banking)) {
+  # Calculate the number of stocks to trade based on the deviation
+  num_stocks_to_trade_banking <- abs(residuals_banking[i-1]) / sd_residuals_banking * scaling_factor_banking
+  num_stocks_to_trade_banking <- round(num_stocks_to_trade_banking)  # Round to nearest whole number
+  
+  # Buy Stock 1 (AKBNK) and Sell Stock 2 (GARAN) if residual exceeds upper limit
+  if (residuals_banking[i-1] > upper_limit_banking) {
+    positions_banking$Stock1_Position[i] <- positions_banking$Stock1_Position[i-1] + num_stocks_to_trade_banking
+    positions_banking$Stock2_Position[i] <- positions_banking$Stock2_Position[i-1] - num_stocks_to_trade_banking
+    positions_banking$Capital[i] <- positions_banking$Capital[i-1] - num_stocks_to_trade_banking * stock1_price_banking[i] + num_stocks_to_trade_banking * stock2_price_banking[i]
+  }
+  # Sell Stock 1 (AKBNK) and Buy Stock 2 (GARAN) if residual falls below lower limit
+  else if (residuals_banking[i-1] < lower_limit_banking) {
+    positions_banking$Stock1_Position[i] <- positions_banking$Stock1_Position[i-1] - num_stocks_to_trade_banking
+    positions_banking$Stock2_Position[i] <- positions_banking$Stock2_Position[i-1] + num_stocks_to_trade_banking
+    positions_banking$Capital[i] <- positions_banking$Capital[i-1] + num_stocks_to_trade_banking * stock1_price_banking[i] - num_stocks_to_trade_banking * stock2_price_banking[i]
+  }
+  # No action if residuals are within control limits
+  else {
+    positions_banking$Stock1_Position[i] <- positions_banking$Stock1_Position[i-1]
+    positions_banking$Stock2_Position[i] <- positions_banking$Stock2_Position[i-1]
+    positions_banking$Capital[i] <- positions_banking$Capital[i-1]
+  }
+  
+  # This is hidden because of too long result, the summary of the trading simulation is going to be given
+  #print(paste("Day:", i, "Stock1 Position:", positions_banking$Stock1_Position[i], "Stock2 Position:", positions_banking$Stock2_Position[i])) 
+}
+
+```
+
+<br>
+
+##### b. Aviation Sector Basic Trading Simulation
+
+```{r message=FALSE, warning=FALSE}
+
+# Buy or sell stocks based on the magnitude of the deviation from the control limits, we can introduce a scaling factor.
+# This factor will determine the number of stocks to buy or sell depending on how far the residual is from the upper or lower limit.
+
+# Initialize variables for the simulation of aviation sector
+initial_capital_aviation <- 100000  # Example initial capital for the aviation sector
+positions_aviation <- data.frame(Date = pairs_df$Date, Stock1_Position = rep(0, nrow(pairs_df)), Stock2_Position = rep(0, nrow(pairs_df)), Capital = initial_capital_aviation, stringsAsFactors = FALSE)
+stock1_price_aviation <- pairs_df$THYAO
+stock2_price_aviation <- pairs_df$PGSUS
+
+# Scaling factor to determine the number of stocks to trade for the aviation sector
+scaling_factor_aviation <- 1000  # This can be adjusted based on strategy
+
+
+# Loop through each day to simulate trades for the aviation sector
+for(i in 2:nrow(positions_aviation)) {
+   
+  # Calculate the number of stocks to trade based on the deviation
+  num_stocks_to_trade_aviation <- abs(residuals_aviation[i-1]) / sd_residuals_aviation * scaling_factor_aviation
+  num_stocks_to_trade_aviation <- round(num_stocks_to_trade_aviation)  # Round to nearest whole number
+  
+  # Print debugging information
+    #print(paste("Day:", i, 
+     #         "Residual:", residuals_aviation[i-1], 
+     #         "Num Stocks to Trade:", num_stocks_to_trade_aviation,
+    #        "Capital Available:", positions_aviation$Capital[i-1]))
+  
+  
+  # Buy Stock 1 (PGSUS) and Sell Stock 2 (THYAO) if residual exceeds upper limit
+  if (residuals_aviation[i-1] > upper_limit_aviation) {
+    positions_aviation$Stock1_Position[i] <- positions_aviation$Stock1_Position[i-1] + num_stocks_to_trade_aviation
+    positions_aviation$Stock2_Position[i] <- positions_aviation$Stock2_Position[i-1] - num_stocks_to_trade_aviation
+    positions_aviation$Capital[i] <- positions_aviation$Capital[i-1] - num_stocks_to_trade_aviation * stock1_price_aviation[i] + num_stocks_to_trade_aviation * stock2_price_aviation[i]
+  }
+  # Sell Stock 1 (PGSUS) and Buy Stock 2 (THYAO) if residual falls below lower limit
+  else if (residuals_aviation[i-1] < lower_limit_aviation) {
+    positions_aviation$Stock1_Position[i] <- positions_aviation$Stock1_Position[i-1] - num_stocks_to_trade_aviation
+    positions_aviation$Stock2_Position[i] <- positions_aviation$Stock2_Position[i-1] + num_stocks_to_trade_aviation
+    positions_aviation$Capital[i] <- positions_aviation$Capital[i-1] + num_stocks_to_trade_aviation * stock1_price_aviation[i] - num_stocks_to_trade_aviation * stock2_price_aviation[i]
+  }
+  # No action
+  else {
+    positions_aviation$Stock1_Position[i] <- positions_aviation$Stock1_Position[i-1]
+    positions_aviation$Stock2_Position[i] <- positions_aviation$Stock2_Position[i-1]
+    positions_aviation$Capital[i] <- positions_aviation$Capital[i-1]
+  }
+  
+  # Implement stop-loss to prevent the capital from going negative
+  if (positions_aviation$Capital[i] < 0) {
+    positions_aviation$Capital[i] <- 0
+    break # Exiting the loop if the capital is depleted
+  }
+  
+  # Print the final capital for the day
+  #print(paste("End of Day:", i, "Capital:", positions_aviation$Capital[i]))
+  
+  # This is hidden because of too long result, the summary of the trading simulation is going to be given
+  #print(paste("Day:", i, "Stock1 Position:", positions_aviation$Stock1_Position[i], "Stock2 Position:", positions_aviation$Stock2_Position[i]))
+  
+}
+```
+
+<br>
+
+##### c. Basic Trading Simulation Results
+
+```{r message=FALSE, warning=FALSE}
+# Final capital for the banking sector after the simulation
+final_capital_banking <- tail(positions_banking$Capital, 1)
+
+# Calculate the total return for the banking sector
+total_return_banking <- (final_capital_banking - initial_capital_banking) / initial_capital_banking * 100
+
+# Final capital for the aviation sector after the simulation
+final_capital_aviation <- tail(positions_aviation$Capital, 1)
+
+# Calculate the total return for the aviation sector
+total_return_aviation  <- (final_capital_aviation  - initial_capital_aviation) / initial_capital_aviation * 100
+
+
+# Results matrix
+results_matrix <- matrix(
+  c(initial_capital_banking, final_capital_banking, total_return_banking,
+    initial_capital_aviation, final_capital_aviation, total_return_aviation),
+  nrow = 2, ncol = 3, byrow = TRUE,
+  dimnames = list(c("Banking Sector", "Aviation Sector"), c("Initial Capital", "Final Capital", "Total Return (%)"))
+)
+
+# Print the results matrix
+print(results_matrix)
+
+```
+
+In this trading simulation, we apply a pairs trading strategy to both the banking and aviation sectors with an initial capital of 100,000 units for each. The strategy operates on a control chart mechanism, where trades are executed based on the deviation of the linear regression model's residuals from established control limits. For the banking sector, AKBNK and GARAN stocks are traded, while for the aviation sector, PGSUS and THYAO are the focus.
+
+A scaling factor of 1000 influences the quantity of stocks to be traded, adjusted according to the magnitude of the deviation from the control limits. This ensures that the number of stocks bought or sold is proportional to the confidence in the signal provided by the residual.
+
+Trades are triggered when residuals breach the control limits---buying PGSUS and selling THYAO when above the upper limit and doing the reverse when below the lower limit in the aviation sector, with similar logic applied to the banking sector's stocks. If residuals are within control limits, no trades are conducted, maintaining the previous positions.
+
+The performance of the strategy is measured by the final capital compared to the initial, and the total return percentage is calculated. The results matrix concludes the simulation with a concise representation of the financial outcomes for each sector, reflecting the effectiveness of the pairs trading strategy under the constant variance assumption for the chosen stock pairs.\
+<br>
+
+##### 7. Advanced Trading Strategy Using Time Series Analysis
+
+##### 7.1. Banking Sector Advanced Trading Simulation
+
+```{r message=FALSE, warning=FALSE}
+# Fit an ARIMA model to the residuals of the banking sector pair
+arima_model_banking <- auto.arima(residuals_banking)
+summary(arima_model_banking)
+
+# Assuming you have already fitted an ARIMA model named arima_model_banking
+# Extract residuals from the ARIMA model
+residuals_arima_banking <- residuals(arima_model_banking)
+
+# Calculate standard deviation of the ARIMA model's residuals
+sd_residuals_arima_banking <- sd(residuals_arima_banking)
+
+# Redefine control limits based on the ARIMA model's residuals
+upper_limit_arima_banking <- mean(residuals_arima_banking) + 2 * sd_residuals_arima_banking
+lower_limit_arima_banking <- mean(residuals_arima_banking) - 2 * sd_residuals_arima_banking
+
+# Revise your trading simulation logic to use these new control limits
+
+# Plot the residuals with control limits
+plot(residuals_arima_banking, main = "Residuals with Two Sigma Control Limits for Banking Sector", type = "l", col = "blue")
+abline(h = upper_limit_arima_banking, col = "red", lty = 2)
+abline(h = lower_limit_arima_banking, col = "red", lty = 2)
+
+# Initialize the positions_arima data frame for the ARIMA-based strategy
+positions_arima_banking <- data.frame(
+  Date = all_dfs$date, 
+  Stock1_Position = rep(0, nrow(all_dfs)), 
+  Stock2_Position = rep(0, nrow(all_dfs)), 
+  Capital = rep(initial_capital_banking, nrow(all_dfs)), 
+  stringsAsFactors = FALSE
+)
+
+# Scaling factor to determine the number of stocks to trade
+scaling_factor_banking <- 1000  # Adjust this based on your strategy
+
+
+# Loop through each day to simulate trades for the banking sector based on ARIMA model
+for(i in 2:nrow(positions_arima_banking)) {
+  # Calculate the number of stocks to trade based on the deviation
+  num_stocks_to_trade_banking <- abs(residuals_arima_banking[i-1]) / sd_residuals_arima_banking * scaling_factor_banking
+  num_stocks_to_trade_banking <- round(num_stocks_to_trade_banking)  # Round to nearest whole number
+  
+  # Buy Stock 1 (AKBNK) and Sell Stock 2 (GARAN) if residual exceeds upper limit
+  if (residuals_arima_banking[i-1] > upper_limit_arima_banking) {
+    positions_arima_banking$Stock1_Position[i] <- positions_arima_banking$Stock1_Position[i-1] + num_stocks_to_trade_banking
+    positions_arima_banking$Stock2_Position[i] <- positions_arima_banking$Stock2_Position[i-1] - num_stocks_to_trade_banking
+    positions_arima_banking$Capital[i] <- positions_arima_banking$Capital[i-1] - num_stocks_to_trade_banking * stock1_price_banking[i] + num_stocks_to_trade_banking * stock2_price_banking[i]
+  }
+  # Sell Stock 1 (AKBNK) and Buy Stock 2 (GARAN) if residual falls below lower limit
+  else if (residuals_arima_banking[i-1] < lower_limit_arima_banking) {
+    positions_arima_banking$Stock1_Position[i] <- positions_arima_banking$Stock1_Position[i-1] - num_stocks_to_trade_banking
+    positions_arima_banking$Stock2_Position[i] <- positions_arima_banking$Stock2_Position[i-1] + num_stocks_to_trade_banking
+    positions_arima_banking$Capital[i] <- positions_arima_banking$Capital[i-1] + num_stocks_to_trade_banking * stock1_price_banking[i] - num_stocks_to_trade_banking * stock2_price_banking[i]
+  }
+  # No action if residuals are within control limits
+  else {
+    positions_arima_banking$Stock1_Position[i] <- positions_arima_banking$Stock1_Position[i-1]
+    positions_arima_banking$Stock2_Position[i] <- positions_arima_banking$Stock2_Position[i-1]
+    positions_arima_banking$Capital[i] <- positions_arima_banking$Capital[i-1]
+  }
+}
+
+# Calculate final capital and total return for the ARIMA-based strategy
+final_capital_arima_banking <- tail(positions_arima_banking$Capital, 1)
+total_return_arima_banking <- (final_capital_arima_banking - initial_capital_banking) / initial_capital_banking * 100
+```
+
+This advanced trading strategy employs an ARIMA (AutoRegressive Integrated Moving Average) model to refine the trading signals for the banking sector stocks AKBNK and GARAN. Initially, the ARIMA model is fitted to the banking sector residuals, and the output is summarized to understand the model's characteristics. Residuals from the ARIMA model are extracted and their standard deviation is calculated, which is then used to set new control limits at two standard deviations from the mean, providing a statistical basis for trade decisions.
+
+The trading simulation logic is updated to incorporate these new ARIMA-based control limits. A visual plot of the ARIMA residuals with the two sigma control limits offers a graphical representation of the deviation points that trigger trades. The simulation uses a scaling factor to determine the volume of stocks to trade, with the number of stocks rounded to the nearest whole number for practical execution.
+
+The loop through each trading day adjusts the positions and capital based on whether the ARIMA residuals exceed the upper or fall below the lower control limits. The strategy dictates buying AKBNK and selling GARAN when residuals are above the upper limit, and selling AKBNK and buying GARAN when residuals are below the lower limit, with no action taken when residuals are within limits.
+
+The final capital and total return are calculated to evaluate the performance of the ARIMA-based strategy. This method introduces a more sophisticated analysis of the price relationship between the two stocks, potentially leading to improved trading decisions and outcomes by dynamically adjusting to the underlying data patterns captured by the ARIMA model.\
+<br>
+
+##### 7.2. Aviation Sector Advanced Trading Simulation
+
+```{r message=FALSE, warning=FALSE}
+# Fit an ARIMA model to the residuals of the aviation sector pair
+arima_model_aviation <- auto.arima(residuals_aviation)
+summary(arima_model_aviation)
+
+# Extract residuals from the ARIMA model
+residuals_arima_aviation <- residuals(arima_model_aviation)
+
+# Calculate standard deviation of the ARIMA model's residuals
+sd_residuals_arima_aviation <- sd(residuals_arima_aviation)
+
+# Redefine control limits based on the ARIMA model's residuals
+upper_limit_arima_aviation <- mean(residuals_arima_aviation) + 2 * sd_residuals_arima_aviation
+lower_limit_arima_aviation <- mean(residuals_arima_aviation) - 2 * sd_residuals_arima_aviation
+
+
+# Revise your trading simulation logic to use these new control limits
+
+# Plot the residuals with control limits
+plot(residuals_arima_aviation, main = "Residuals with Two Sigma Control Limits for Aviation Sector", type = "l", col = "blue")
+abline(h = upper_limit_arima_aviation, col = "red", lty = 2)
+abline(h = lower_limit_arima_aviation, col = "red", lty = 2)
+
+
+# Initialize the positions_arima_aviation data frame
+positions_arima_aviation <- data.frame(
+  Date = pairs_df$Date, 
+  Stock1_Position = rep(0, nrow(all_dfs)), 
+  Stock2_Position = rep(0, nrow(all_dfs)), 
+  Capital = rep(initial_capital_aviation, nrow(all_dfs)), 
+  stringsAsFactors = FALSE
+)
+
+# Implement the revised trading simulation with scaling factor
+scaling_factor_aviation <- 1000  # Adjust this based on your strategy
+
+for(i in 2:nrow(positions_arima_aviation)) {
+  num_stocks_to_trade <- abs(residuals_arima_aviation[i-1]) / sd_residuals_arima_aviation * scaling_factor_aviation
+  num_stocks_to_trade <- round(num_stocks_to_trade)  # Round to nearest whole number
+  
+  if (residuals_arima_aviation[i-1] > upper_limit_arima_aviation) {
+    # Buy Stock1 (PGSUS) and Sell Stock2 (THYAO)
+    positions_arima_aviation$Stock2_Position[i] <- positions_arima_aviation$Stock2_Position[i-1] + num_stocks_to_trade
+    positions_arima_aviation$Stock1_Position[i] <- positions_arima_aviation$Stock1_Position[i-1] - num_stocks_to_trade
+    print(paste("Buying PGSUS on day", i, "Number of stocks to trade:", num_stocks_to_trade))
+    positions_arima_aviation$Capital[i] <- positions_arima_aviation$Capital[i-1] - num_stocks_to_trade * stock1_price_aviation[i] + num_stocks_to_trade * stock2_price_aviation[i]
+  } else if (residuals_arima_aviation[i-1] < lower_limit_arima_aviation) {
+    # Sell Stock1 (PGSUS) and Buy Stock2 (THYAO)
+    positions_arima_aviation$Stock2_Position[i] <- positions_arima_aviation$Stock2_Position[i-1] - num_stocks_to_trade
+    positions_arima_aviation$Stock1_Position[i] <- positions_arima_aviation$Stock1_Position[i-1] + num_stocks_to_trade
+    print(paste("Selling PGSUS on day", i, "Number of stocks to trade:", num_stocks_to_trade))
+    positions_arima_aviation$Capital[i] <- positions_arima_aviation$Capital[i-1] + num_stocks_to_trade * stock1_price_aviation[i] - num_stocks_to_trade * stock2_price_aviation[i]
+  } else {
+    # No trading action
+    positions_arima_aviation$Stock2_Position[i] <- positions_arima_aviation$Stock2_Position[i-1]
+    positions_arima_aviation$Stock1_Position[i] <- positions_arima_aviation$Stock1_Position[i-1]
+    positions_arima_aviation$Capital[i] <- positions_arima_aviation$Capital[i-1]
+  }
+}
+
+
+```
+
+The advanced trading simulation for the aviation sector outlined above utilizes an ARIMA model to forecast the behavior of the stock pair comprising PGSUS and THYAO. This model's residuals serve as a basis for redefining control limits, which guide the trading decisions. A scaling factor is employed to quantify the number of stocks traded, adjusted in relation to the deviation of the residuals from the set control limits. The simulation iterates through each trading day, executing buy orders for PGSUS and selling THYAO when the residuals exceed the upper control limit, and the inverse when residuals fall below the lower control limit. When residuals lie within the control limits, no trading action is taken. The positions and capital are updated daily, with significant transactions printed out. This approach leverages the predictive power of the ARIMA model to inform trading decisions, potentially enhancing the strategy's responsiveness to market dynamics within the aviation sector.\
+<br>
+
+#### 8. Comparison Between Basic and Advanced Strategies
+
+##### 8.1. Banking Sector Comparison
+
+```{r message=FALSE, warning=FALSE}
+# Assuming 'positions' is the data frame from the basic strategy and 'positions_arima' from the advanced strategy
+# Extract cumulative capital for both strategies
+cumulative_capital_basic_banking <- cumsum(positions_banking$Capital)
+cumulative_capital_arima_banking <- cumsum(positions_arima_banking$Capital)
+
+# Calculate total returns for both strategies
+total_return_basic_banking <- (tail(positions_banking$Capital, 1) - initial_capital_banking) / initial_capital_banking * 100
+total_return_arima_banking <- (tail(positions_arima_banking$Capital, 1) - initial_capital_banking) / initial_capital_banking * 100
+
+# Create a matrix for comparison
+results_comparison <- matrix(
+  c(initial_capital_banking, tail(positions_banking$Capital, 1), total_return_basic_banking,
+    initial_capital_banking, tail(positions_arima_banking$Capital, 1), total_return_arima_banking),
+  nrow = 2, ncol = 3, byrow = TRUE,
+  dimnames = list(c("Basic Strategy", "Advanced Strategy"), c("Initial Capital", "Final Capital", "Total Return (%)"))
+)
+
+# Print the comparison matrix
+print(results_comparison)
+
+# Ensure Date columns are of Date class
+positions_banking$Date <- as.Date(positions_banking$Date)
+positions_arima_banking$Date <- as.Date(positions_arima_banking$Date)
+
+# Plotting the cumulative capital over time using Date for x-axis
+plot(positions_banking$Date, positions_banking$Capital, type = "l", col = "blue", 
+     ylim = c(min(c(positions_banking$Capital, positions_arima_banking$Capital)), 
+     max(c(positions_banking$Capital, positions_arima_banking$Capital))), 
+     xlab = "Time", ylab = "Capital")
+lines(positions_arima_banking$Date, positions_arima_banking$Capital, type = "l", col = "red")
+title(main = "Comparative Analysis of Trading Strategies in Banking Sector")
+legend("topleft", legend = c("Basic Strategy", "Advanced Strategy (ARIMA)"), col = c("blue", "red"), lty = 1)
+
+```
+
+In the above chart, cumulative capital is tracked for both the basic and advanced trading strategies within the banking sector. The cumulative capital for each strategy is calculated by summing up the capital over time, creating a time series representation of capital growth. A comparative plot is then created to visually assess the performance of the two strategies over time.
+
+The chart suggests that while the advanced ARIMA-based strategy and the basic trading strategy start off similarly, towards the end of the simulation period, it is the basic strategy that yields a higher return. The blue line, representing the basic strategy, eventually surpasses the red line of the advanced strategy, indicating that the simpler approach resulted in a greater accumulation of capital over time. This could imply that the complexity of the ARIMA-based model did not translate to better performance in this particular scenario and that the basic strategy was more effective in capitalizing on the trading opportunities presented by the market.\
+<br>
+
+##### 8.2. Aviation Sector Comparison
+
+```{r message=FALSE, warning=FALSE}
+
+# Calculate final capital and total return
+final_capital_arima_aviation <- tail(positions_arima_aviation$Capital, 1)
+total_return_arima_aviation <- (final_capital_arima_aviation - initial_capital_aviation) / initial_capital_aviation * 100
+
+# Calculate total returns for both strategies
+total_return_basic_aviation <- (tail(positions_aviation$Capital, 1) - initial_capital_aviation) / initial_capital_aviation * 100
+
+# Create a matrix for comparison
+results_comparison_aviation <- matrix(
+  c(initial_capital_aviation, tail(positions_aviation$Capital, 1), total_return_basic_aviation,
+    initial_capital_aviation, final_capital_arima_aviation, total_return_arima_aviation),
+  nrow = 2, ncol = 3, byrow = TRUE,
+  dimnames = list(c("Basic Strategy", "Advanced Strategy"), c("Initial Capital", "Final Capital", "Total Return (%)"))
+)
+
+# Print the comparison matrix
+print(results_comparison_aviation)
+
+positions_aviation$Date <- as.Date(positions_aviation$Date)
+positions_arima_aviation$Date <- as.Date(positions_arima_aviation$Date)
+
+# Plot the cumulative capital over time for both strategies in the aviation sector
+plot(positions_aviation$Date, positions_aviation$Capital, type = "l", col = "blue", 
+     ylim = c(min(c(positions_aviation$Capital, positions_arima_aviation$Capital)), 
+     max(c(positions_aviation$Capital, positions_arima_aviation$Capital))), 
+     xlab = "Time", ylab = "Capital", main = "Comparative Analysis of Trading Strategies in Aviation Sector")
+lines(positions_arima_aviation$Date, positions_arima_aviation$Capital, type = "l", col = "red")
+legend("bottomleft", legend = c("Basic Strategy", "Advanced Strategy (ARIMA)"), col = c("blue", "red"), lty = 1)
+
+```
+
+<br>
+
+"The chart above initially suggested that in the early stages, the advanced ARIMA strategy may have underperformed when compared to the basic strategy, with a projection of poorer cumulative return. However, the actual results indicate a different scenario. Both the basic and the advanced ARIMA strategies have performed exceptionally well, with the basic strategy achieving a 4651.387% return and the advanced ARIMA strategy not far behind with a 4603.415% return. These significant returns indicate that both strategies were highly effective in capitalizing on the movements within the aviation sector.
+
+<br>
+
+##### 8.3. Overall Comparison
+
+```{r message=FALSE, warning=FALSE}
+# Determine the number of rows in your data frames
+num_rows <- nrow(all_dfs)
+
+# Assign this date sequence to your data frames
+positions_banking$Date <- all_dfs$date
+positions_arima_banking$Date <- all_dfs$date
+positions_aviation$Date <- all_dfs$date
+positions_arima_aviation$Date <- all_dfs$date
+
+# Plot the cumulative capital over time for both strategies
+plot(positions_banking$Date, positions_banking$Capital, type = "l", col = "blue", xlab = "Time", ylab = "Capital", main = "Comparative Analysis of Trading Strategies in Banking and Aviation Sectors")
+lines(positions_arima_banking$Date, positions_arima_banking$Capital, type = "l", col = "red")
+lines(positions_aviation$Date, positions_aviation$Capital, type = "l", col = "green")
+lines(positions_arima_aviation$Date, positions_arima_aviation$Capital, type = "l", col = "orange")
+
+# Add a legend
+legend("topleft", legend = c("Banking Basic", "Banking Advanced (ARIMA)", "Aviation Basic", "Aviation Advanced (ARIMA)"), col = c("blue", "red", "green", "orange"), lty = 1)
+
+```
+
+```{r message=FALSE, warning=FALSE}
+# Find the overall min and max capital across all strategies to set the y-axis limits
+all_capitals <- c(positions_banking$Capital, positions_arima_banking$Capital,
+                  positions_aviation$Capital, positions_arima_aviation$Capital)
+min_capital <- min(all_capitals, na.rm = TRUE)
+max_capital <- max(all_capitals, na.rm = TRUE)
+
+# Expand the limits a bit beyond the min and max for better visibility
+expanded_min <- min_capital - (0.1 * abs(min_capital))
+expanded_max <- max_capital + (0.1 * abs(max_capital))
+
+# Plot with the new y-axis limits
+plot(positions_banking$Date, positions_banking$Capital, type = "l", col = "blue", xlab = "Time", ylab = "Capital",
+     main = "Comparative Analysis of Trading Strategies in Banking and Aviation Sectors", 
+     ylim = c(expanded_min, expanded_max))
+
+lines(positions_arima_banking$Date, positions_arima_banking$Capital, type = "l", col = "red")
+lines(positions_aviation$Date, positions_aviation$Capital, type = "l", col = "green")
+lines(positions_arima_aviation$Date, positions_arima_aviation$Capital, type = "l", col = "orange")
+
+# Add a legend to the plot
+legend("topleft", legend = c("Banking Basic", "Banking Advanced (ARIMA)", 
+                             "Aviation Basic", "Aviation Advanced (ARIMA)"), 
+       col = c("blue", "red", "green", "orange"), lty = 1)
+
+```
+
+<br>\
+The comparative analysis presented in the chart shows the performance of two different trading strategies across the banking and aviation sectors. We can infer that the advanced strategies, which incorporate ARIMA modeling, underperform compared to the basic strategies in both sectors. The adherence of residuals to control limits in the initial stages might have mitigated a steeper decline in the advanced strategy's performance relative to the basic strategy. While both strategies have led to profits in the banking sector, they result in negative returns in the aviation sector. This suggests that neither strategy is likely to yield financial gains within the aviation sector, highlighting the importance of sector-specific strategy effectiveness and the potential limitations of these trading models when applied to different market conditions.
+
+<br>
+
+#### 9. Conclusion
+
+#### [Banking Sector]{.underline}
+
+Basic Strategy: The basic strategy also fared well in the banking industry, generating 1,578,282.8 from the original capital with a total return of 1478.2828%.
+
+Advanced Strategy (ARIMA): The original capital was increased to 518,313.8 after the advanced strategy performed worse, with a total return of 418.3138%.
+
+The basic plan performed significantly better for the banking industry than the advanced strategy. The difference may arise from either overfitting of the ARIMA model to the data, which would lead to less successful trading signals, or from the model failing to capture the fundamental dynamics in the banking stock prices.
+
+#### [Aviation Sector]{.underline}
+
+Basic method: By increasing the original money from 100,000 to 4,751,387, this method produced an incredibly high total return of 4651.387%.
+
+Enhanced Approach (ARIMA): With a total return of 4603.415%, the advanced approach likewise outperformed the others, raising the initial capital to 4,703,415.
+
+The statistics for the aviation industry show that both approaches had very high rates of return on investment. The similarity in the overall return percentage indicates that the ARIMA model did not offer a substantial advantage over the simple strategy in this sector, despite its added complexity. This could mean that enough favorable conditions existed in the market or in the particular characteristics of the stock pair in question for even a simple approach to profitably take advantage of the opportunity.
+
+#### [Styles of Simulation]{.underline}
+
+Without taking into account the temporal connections in the data, the fundamental approach most likely employed straightforward trading rules based on statistical thresholds.
+
+The enhanced ARIMA approach made an effort to better forecast future movements by modeling the time-series data. Although this increased complexity, these simulations did not always perform better as a result of it.
